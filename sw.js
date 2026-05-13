@@ -1,4 +1,4 @@
-const CACHE = 'copymaster-v1';
+const CACHE = 'copymaster-v2';
 const ASSETS = [
   './index.html',
   './manifest.json',
