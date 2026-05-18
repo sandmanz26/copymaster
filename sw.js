@@ -1,9 +1,9 @@
-const CACHE = 'copymaster-v2';
+const CACHE = 'copymaster-v3';
 const ASSETS = [
   './index.html',
   './manifest.json',
-  './icon-192.svg',
-  './icon-512.svg'
+  './icon-192.png',
+  './icon-512.png'
 ];
 
 self.addEventListener('install', e => {
