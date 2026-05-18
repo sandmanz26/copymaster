@@ -457,6 +457,84 @@ mark{background:rgba(124,109,240,.28);color:var(--accent);border-radius:2px;padd
 ::-webkit-scrollbar{width:3px;height:3px;}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+/* ── Paste Zone ──────────────────────────────────── */
+.paste-zone{
+  margin:14px 16px 4px;
+  border-radius:var(--r);
+  border:1.5px dashed var(--border);
+  background:var(--surface);
+  position:relative;min-height:70px;
+  transition:border-color var(--ease),box-shadow var(--ease);
+  overflow:hidden;
+}
+.paste-zone[data-s="active"]{
+  border-color:var(--primary);border-style:solid;
+  box-shadow:0 0 0 3px rgba(124,109,240,.1);
+}
+.paste-zone[data-s="success"]{
+  border-color:var(--green);border-style:solid;
+  box-shadow:0 0 0 3px rgba(52,211,153,.1);
+}
+/* Idle layer */
+.pz-idle{
+  position:absolute;inset:0;
+  display:flex;align-items:center;gap:12px;padding:0 16px;
+  pointer-events:none;transition:opacity .15s;
+}
+.paste-zone[data-s="active"] .pz-idle,
+.paste-zone[data-s="success"] .pz-idle{opacity:0;}
+.pz-ico{
+  width:40px;height:40px;border-radius:12px;flex-shrink:0;
+  background:rgba(124,109,240,.12);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--primary);
+}
+.pz-label{display:block;font-size:14px;font-weight:600;color:var(--text);margin-bottom:2px;}
+.pz-sub{display:block;font-size:12px;color:var(--text-3);}
+/* Textarea */
+.pz-area{
+  position:absolute;inset:0;width:100%;height:100%;
+  background:transparent;border:none;outline:none;
+  padding:14px 16px;
+  color:transparent;caret-color:var(--text);
+  font-size:14px;font-family:inherit;resize:none;cursor:pointer;
+}
+.paste-zone[data-s="active"] .pz-area{color:var(--text);cursor:text;}
+.pz-area::placeholder{color:var(--text-3);opacity:0;}
+.paste-zone[data-s="active"] .pz-area::placeholder{opacity:1;}
+/* Success layer */
+.pz-ok{
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  background:rgba(52,211,153,.08);
+  color:var(--green);font-size:15px;font-weight:700;
+  opacity:0;pointer-events:none;transition:opacity .2s;
+}
+.paste-zone[data-s="success"] .pz-ok{opacity:1;}
+
+/* ── Image in cards ──────────────────────────────── */
+.qcard-img{
+  width:100%;height:80px;border-radius:8px;
+  overflow:hidden;margin-top:2px;
+  background:var(--surface2);
+}
+.qcard-img img{width:100%;height:100%;object-fit:cover;}
+
+.snip-thumb{
+  width:48px;height:48px;border-radius:8px;
+  overflow:hidden;flex-shrink:0;background:var(--surface2);
+}
+.snip-thumb img{width:100%;height:100%;object-fit:cover;}
+
+/* ── Image in detail ─────────────────────────────── */
+.detail-img{
+  width:100%;max-height:52dvh;border-radius:var(--r-sm);
+  overflow:hidden;margin-bottom:12px;
+  background:var(--surface2);
+  display:flex;align-items:center;justify-content:center;
+}
+.detail-img img{max-width:100%;max-height:52dvh;object-fit:contain;display:block;}
 </style>
 </head>
 <body>
@@ -481,6 +559,27 @@ mark{background:rgba(124,109,240,.28);color:var(--accent);border-radius:2px;padd
       </svg>
       <span class="search-trigger-text">Cari snippet…</span>
       <span class="search-trigger-recent" id="recentBadge" style="display:none"></span>
+    </div>
+
+    <!-- Paste Zone -->
+    <div class="paste-zone" id="pasteZone" data-s="idle">
+      <div class="pz-idle">
+        <div class="pz-ico">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2"/>
+            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+          </svg>
+        </div>
+        <div>
+          <span class="pz-label">Tap & paste di sini</span>
+          <span class="pz-sub">Teks atau gambar — langsung tersimpan</span>
+        </div>
+      </div>
+      <textarea class="pz-area" id="pasteArea" placeholder="Tap, lalu tempel (paste) teks atau gambar…"></textarea>
+      <div class="pz-ok">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        <span id="pzOkText">Tersimpan!</span>
+      </div>
     </div>
 
     <!-- Quick Access -->
@@ -598,7 +697,8 @@ mark{background:rgba(124,109,240,.28);color:var(--accent);border-radius:2px;padd
     <div class="handle"></div>
     <h2 id="dtTitle"></h2>
     <div class="detail-meta" id="dtMeta"></div>
-    <div class="detail-body" id="dtBody"></div>
+    <div class="detail-img" id="dtImg" style="display:none"><img id="dtImgEl" src="" alt=""></div>
+    <div class="detail-body" id="dtBody" style="display:none"></div>
     <button class="btn btn-p" id="btnDtCopy"><span>Salin ke Clipboard</span></button>
     <div class="detail-row">
       <button class="btn btn-g" id="btnDtEdit">Edit</button>
@@ -644,7 +744,13 @@ let addFolderPre = null; // folder preset for add modal
 let cfmCb        = null;
 
 function jload(k){try{return JSON.parse(localStorage.getItem(k));}catch{return null;}}
-function jsave(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
+function jsave(k,v){
+  try{localStorage.setItem(k,JSON.stringify(v));return true;}
+  catch(e){
+    if(e.name==='QuotaExceededError') toast('⚠️ Penyimpanan penuh! Hapus beberapa gambar.');
+    return false;
+  }
+}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
 
 /* ═══════════════════════════════════════════
@@ -725,22 +831,27 @@ function renderQuick() {
     return;
   }
 
-  el.innerHTML = list.map(item => `
-    <div class="qcard" data-qid="${item.id}">
+  el.innerHTML = list.map(item => {
+    const isImg = item.type === 'image' && item.imageSrc;
+    return `<div class="qcard" data-qid="${item.id}">
       <div class="qcard-badge ${item.pinned ? 'pinned' : ''}">
         ${item.pinned
           ? `<svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg> Pinned`
           : `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Sering`}
       </div>
-      <div class="qcard-title">${esc(item.title||'Tanpa judul')}</div>
-      <div class="qcard-preview">${esc(item.content)}</div>
-    </div>`).join('');
+      ${isImg
+        ? `<div class="qcard-img"><img src="${item.imageSrc}" loading="lazy" alt=""></div>`
+        : `<div class="qcard-title">${esc(item.title||'Tanpa judul')}</div>
+           <div class="qcard-preview">${esc(item.content)}</div>`}
+    </div>`;
+  }).join('');
 
   el.querySelectorAll('.qcard').forEach(c => {
     c.addEventListener('click', async () => {
       const item = items.find(i => i.id === c.dataset.qid);
       if (!item) return;
-      if (await copy(item.content)) {
+      const ok = item.type === 'image' ? await copyImg(item.imageSrc) : await copy(item.content);
+      if (ok) {
         item.copyCount = (item.copyCount||0) + 1;
         jsave(K.items, items);
         c.classList.add('flash');
@@ -788,7 +899,7 @@ function folderIco(color) {
    FOLDER SCREEN
 ═══════════════════════════════════════════ */
 function openFolder(catId) {
-  curFolder = catId;
+  curFolder = catId; lastCat = catId;
   const cat = cats.find(c => c.id === catId) || {};
   push('folder', () => {
     document.getElementById('folderTitle').textContent = cat.name || 'Folder';
@@ -830,7 +941,8 @@ function renderSnippets(catId) {
       e.stopPropagation();
       const item = items.find(i => i.id === btn.dataset.sid);
       if (!item) return;
-      if (await copy(item.content)) {
+      const ok = item.type === 'image' ? await copyImg(item.imageSrc) : await copy(item.content);
+      if (ok) {
         item.copyCount = (item.copyCount||0) + 1;
         jsave(K.items, items);
         btn.classList.add('ok');
@@ -843,10 +955,12 @@ function renderSnippets(catId) {
 }
 
 function snipRowHTML(item) {
+  const isImg = item.type === 'image' && item.imageSrc;
   return `<div class="snip-row" data-sid="${item.id}">
+    ${isImg ? `<div class="snip-thumb"><img src="${item.imageSrc}" loading="lazy" alt=""></div>` : ''}
     <div class="snip-left">
-      <div class="snip-title${!item.title?' dim':''}">${esc(item.title||'Tanpa judul')}</div>
-      <div class="snip-preview">${esc(item.content)}</div>
+      <div class="snip-title${!item.title?' dim':''}">${esc(item.title||(isImg?'Gambar':'Tanpa judul'))}</div>
+      ${isImg ? '' : `<div class="snip-preview">${esc(item.content)}</div>`}
       <div class="snip-meta">
         ${item.pinned ? '<div class="pin-pip"></div>' : ''}
         ${(item.copyCount||0)>0 ? `<span class="snip-copies">${copyIco(10)} ${item.copyCount}×</span>` : ''}
@@ -994,7 +1108,8 @@ function renderResults(el, q) {
       e.stopPropagation();
       const item = items.find(i => i.id === btn.dataset.rid);
       if (!item) return;
-      if (await copy(item.content)) {
+      const ok = item.type === 'image' ? await copyImg(item.imageSrc) : await copy(item.content);
+      if (ok) {
         item.copyCount = (item.copyCount||0)+1;
         jsave(K.items, items);
         saveRecent(q);
@@ -1030,8 +1145,17 @@ function openDetail(id) {
   detailId = id;
   const cat = cats.find(c => c.id === item.category) || {};
 
-  document.getElementById('dtTitle').textContent = item.title || 'Tanpa judul';
-  document.getElementById('dtBody').textContent  = item.content;
+  const isImg = item.type === 'image' && item.imageSrc;
+  document.getElementById('dtTitle').textContent = item.title || (isImg ? 'Gambar' : 'Tanpa judul');
+  const imgEl = document.getElementById('dtImg');
+  const bodyEl = document.getElementById('dtBody');
+  if (isImg) {
+    document.getElementById('dtImgEl').src = item.imageSrc;
+    imgEl.style.display = ''; bodyEl.style.display = 'none';
+  } else {
+    bodyEl.textContent = item.content;
+    bodyEl.style.display = ''; imgEl.style.display = 'none';
+  }
   document.getElementById('dtMeta').innerHTML = [
     `<span>${fmtDate(item.createdAt)}</span>`,
     cat.name ? `<span style="color:${cat.color||'var(--text-3)'}">📁 ${esc(cat.name)}</span>` : '',
@@ -1258,7 +1382,8 @@ document.getElementById('btnCancelFolder').addEventListener('click', () => close
 document.getElementById('btnDtCopy').addEventListener('click', async () => {
   const item = items.find(i => i.id === detailId);
   if (!item) return;
-  if (await copy(item.content)) {
+  const ok = item.type === 'image' ? await copyImg(item.imageSrc) : await copy(item.content);
+  if (ok) {
     item.copyCount = (item.copyCount||0)+1;
     jsave(K.items, items);
     const sp = document.getElementById('btnDtCopy').querySelector('span');
@@ -1303,6 +1428,125 @@ document.addEventListener('keydown', e => {
 });
 
 /* ═══════════════════════════════════════════
+   IMAGE COPY
+═══════════════════════════════════════════ */
+async function copyImg(src) {
+  try {
+    const res  = await fetch(src);
+    const blob = await res.blob();
+    await navigator.clipboard.write([new ClipboardItem({[blob.type]: blob})]);
+    return true;
+  } catch {
+    // Fallback: open image in new tab so user can long-press save/copy
+    toast('⚠️ Ketuk gambar untuk menyalinnya');
+    return false;
+  }
+}
+
+async function compressImg(file, maxDim = 1200) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const ratio = Math.min(maxDim / img.naturalWidth, maxDim / img.naturalHeight, 1);
+      const w = Math.round(img.naturalWidth * ratio);
+      const h = Math.round(img.naturalHeight * ratio);
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(c.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(); };
+    img.src = url;
+  });
+}
+
+/* ═══════════════════════════════════════════
+   PASTE ZONE
+═══════════════════════════════════════════ */
+let lastCat = null;
+
+function initPasteZone() {
+  const zone = document.getElementById('pasteZone');
+  const area = document.getElementById('pasteArea');
+
+  // Clicking zone focuses textarea
+  zone.addEventListener('click', e => {
+    if (e.target !== area) area.focus();
+  });
+
+  area.addEventListener('focus', () => zone.dataset.s = 'active');
+
+  area.addEventListener('blur', async () => {
+    const val = area.value.trim();
+    if (val) {
+      saveFromPaste({type:'text', content:val});
+    } else {
+      zone.dataset.s = 'idle';
+    }
+  });
+
+  area.addEventListener('paste', async e => {
+    e.preventDefault();
+    await processPaste(e.clipboardData);
+  });
+
+  // Global paste listener — catches Ctrl+V even when textarea not focused
+  document.addEventListener('paste', async e => {
+    if (document.activeElement === area) return; // already handled
+    if (document.querySelector('.backdrop.open')) return; // modal open
+    if (navStack[navStack.length - 1] !== 'home') return; // not on home screen
+    await processPaste(e.clipboardData);
+  });
+}
+
+async function processPaste(clipData) {
+  if (!clipData) return;
+  const dataItems = [...(clipData.items || [])];
+
+  // Image takes priority
+  const imgItem = dataItems.find(i => i.type.startsWith('image/'));
+  if (imgItem) {
+    const file = imgItem.getAsFile();
+    try {
+      const src = await compressImg(file);
+      saveFromPaste({type:'image', imageSrc:src});
+    } catch { toast('❌ Gagal memproses gambar'); }
+    return;
+  }
+
+  // Plain text
+  const text = clipData.getData('text/plain').trim();
+  if (text) saveFromPaste({type:'text', content:text});
+}
+
+function saveFromPaste(data) {
+  const catId = lastCat || cats[0]?.id;
+  items.unshift({
+    id: uid(), type: data.type || 'text',
+    title: '', content: data.content || '',
+    imageSrc: data.imageSrc || null,
+    category: catId, pinned: false,
+    createdAt: Date.now(), copyCount: 0
+  });
+  if (!jsave(K.items, items)) return; // quota exceeded handled in jsave
+
+  const area = document.getElementById('pasteArea');
+  area.value = '';
+  area.blur();
+
+  const zone   = document.getElementById('pasteZone');
+  const okText = document.getElementById('pzOkText');
+  okText.textContent = data.type === 'image' ? '🖼️ Gambar tersimpan!' : '📋 Teks tersimpan!';
+  zone.dataset.s = 'success';
+  setTimeout(() => { zone.dataset.s = 'idle'; }, 2000);
+
+  renderHome();
+  toast(data.type === 'image' ? '🖼️ Gambar disimpan' : '📋 Teks disimpan');
+}
+
+/* ═══════════════════════════════════════════
    SERVICE WORKER
 ═══════════════════════════════════════════ */
 if ('serviceWorker' in navigator)
@@ -1330,6 +1574,7 @@ if ('serviceWorker' in navigator)
     jsave(K.items, items);
   }
 
+  initPasteZone();
   renderHome();
 })();
 </script>
