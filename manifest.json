@@ -1,6 +1,6 @@
 {
-  "name": "CopyMaster",
-  "short_name": "CopyMaster",
+  "name": "copymaster",
+  "short_name": "copymaster",
   "description": "Simpan & salin teks penting kapan saja",
   "start_url": "./index.html",
   "display": "standalone",
